@@ -1,0 +1,574 @@
+---
+title: "Intoxication Detection Project"
+author: "Norman, Elsa"
+date: 'Last Updated: Fri Dec 12, 2025' 
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+**Using smartphone accelerometer data to detect user intoxication**
+
+***This project uses a dataset from the UC Irvine Machine Learning Repository at https://archive.ics.uci.edu/dataset/515/bar+crawl+detecting+heavy+drinking. The dataset contains smartphone accelerometer data and TAC measurements for 13 subjects while participating in the Ohio State University Annual Senior Bar Crawl. This project investigates whether smartphone accelerometer data can be used to detect intoxication for the 13 subjects in this study.***
+
+
+
+```{css solution-region, echo=FALSE}
+.solution {
+    background-color: #232D4B10;
+    border-style: solid;
+    border-color: #232D4B;
+    padding: .5em;
+    margin: 20px
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+## [Models]{style="color:#FF7F50"}
+
+We need to first load the necessary libraries. 
+```{r message=FALSE}
+library(randomForest)
+library(gbm)
+library(tree)
+library(e1071)
+library(class)
+library(ggplot2)
+```
+
+Load in dataset and split into testing and training values
+```{r}
+set.seed(52)
+data = read.csv("bar+crawl+detecting+heavy+drinking\\data\\average_accel.csv")
+
+data$label = as.factor(data$label)
+
+# rerrange rows to ensure representative sampling
+data = data[sample(nrow(data)), ]
+
+data_rows = floor(0.80 * nrow(data))
+train_indices = sample(c(1:nrow(data)), data_rows)
+train_data = data[train_indices,]
+test_data = data[-train_indices,]
+```
+
+```{r}
+accuracies = rep(NA, 8)
+precisions = rep(NA, 8)
+recalls = rep(NA, 8)
+f1s = rep(NA, 8)
+```
+
+
+### [1. Logistic Regression Model]{style="color:#FF7F50"}
+
+Run the logistic regression model and obtain accuracy, precision, recall, and F1-score.
+
+#### {.solution}
+```{r}
+model = glm(label ~ ., data = train_data, family = binomial)
+
+test_labels = factor(test_data$label, labels = c("sober", "intoxicated"))
+
+pred_probs = predict(model, test_data, type = "response")
+pred = factor(ifelse(pred_probs < 0.5, "sober", "intoxicated"))
+
+
+tp = sum(test_labels == pred & pred == "intoxicated")
+fp = sum(test_labels != pred & pred == "intoxicated")
+tn = sum(test_labels == pred & pred == "sober")
+fn = sum(test_labels != pred & pred == "sober")
+
+accuracy = mean(test_labels == pred); accuracies[1] = accuracy
+precision = tp / (tp + fp); precisions[1] = precision
+recall = tp / (tp + fn); recalls[1] = recall
+f1 = 2 * (precision * recall) / (precision + recall); f1s[1] = f1
+
+cat(noquote(paste0("Logistic Regression\n\nAccuracy: ", round(accuracy,4),
+                   "\nPrecision: ", round(precision,4),
+                   "\nRecall: ", round(recall,4),
+                   "\nF1: ", round(f1,4), "\n\n")))
+
+conf_matrix = table(Predicted = pred, True = test_labels)
+cm_swapped = conf_matrix[c(2, 1), ] # swap rows
+cm_swapped
+```
+
+
+### [2. Bagging Model]{style="color:#FF7F50"}
+
+First conduct parameter tuning on mtry, then run the bagging model and obtain accuracy, precision, recall, and F1-score.
+
+#### {.solution}
+```{r}
+bag.acc.values = rep(NA, 4)
+
+for (i in 1:4) {
+  set.seed(12)
+  bag = randomForest(label ~ ., data = train_data, mtry = i, importance = TRUE)
+  pred = predict(bag, test_data, type="response")
+  test_labels = test_data$label
+  bag.acc.values[i] = mean(test_labels == pred)
+}
+
+mtry = which.max(bag.acc.values)
+
+names(bag.acc.values) = c(1,2,3,4)
+bag.acc.values
+```
+
+```{r}
+set.seed(12)
+bag = randomForest(label ~ ., data = train_data, mtry = mtry, importance = TRUE)
+bag
+
+importance(bag)
+varImpPlot(bag)
+
+# test accuracy
+pred = predict(bag, test_data, type="response")
+
+
+test_labels = test_data$label
+
+tp = sum(test_labels == pred & pred == 1)
+fp = sum(test_labels != pred & pred == 1)
+tn = sum(test_labels == pred & pred == 0)
+fn = sum(test_labels != pred & pred == 0)
+
+accuracy = mean(test_labels == pred); accuracies[2] = accuracy
+precision = tp / (tp + fp); precisions[2] = precision
+recall = tp / (tp + fn); recalls[2] = recall
+f1 = 2 * (precision * recall) / (precision + recall); f1s[2] = f1
+
+cat(noquote(paste0("Bagging\n\nAccuracy: ", round(accuracy,4),
+                   "\nPrecision: ", round(precision,4),
+                   "\nRecall: ", round(recall,4),
+                   "\nF1: ", round(f1,4))))
+
+test_labels = factor(test_data$label, labels = c("sober", "intoxicated"))
+pred_labels = factor(pred, labels = c("sober", "intoxicated"))
+
+conf_matrix = table(Predicted = pred_labels, True = test_labels)
+conf_matrix
+```
+
+
+### [3. Random Forest Model]{style="color:#FF7F50"}
+
+Run the random forest model and obtain accuracy, precision, recall, and F1-score.
+
+#### {.solution}
+```{r}
+set.seed(12)
+rf = randomForest(label ~ ., data = train_data, importance = TRUE)
+rf
+
+importance(rf)
+varImpPlot(rf)
+
+# test accuracy
+pred = predict(rf, test_data, type="response")
+
+
+test_labels = test_data$label
+
+tp = sum(test_labels == pred & pred == 1)
+fp = sum(test_labels != pred & pred == 1)
+tn = sum(test_labels == pred & pred == 0)
+fn = sum(test_labels != pred & pred == 0)
+
+accuracy = mean(test_labels == pred); accuracies[3] = accuracy
+precision = tp / (tp + fp); precisions[3] = precision
+recall = tp / (tp + fn); recalls[3] = recall
+f1 = 2 * (precision * recall) / (precision + recall); f1s[3] = f1
+
+cat(noquote(paste0("Random Forest\n\nAccuracy: ", round(accuracy,4),
+                   "\nPrecision: ", round(precision,4),
+                   "\nRecall: ", round(recall,4),
+                   "\nF1: ", round(f1,4))))
+
+test_labels = factor(test_data$label, labels = c("sober", "intoxicated"))
+pred_labels = factor(pred, labels = c("sober", "intoxicated"))
+
+conf_matrix = table(Predicted = pred_labels, True = test_labels)
+conf_matrix
+```
+
+
+### [4. Boosting Model]{style="color:#FF7F50"}
+
+First conduct parameter tuning on interaction.depth and cv.folds, then run the bagging model and obtain accuracy, precision, recall, and F1-score.
+
+#### {.solution}
+```{r}
+depth.acc.values = rep(NA, 4)
+folds.acc.values = rep(NA, 7)
+
+for (i in 1:4) {
+  set.seed(12)
+  
+  boost = gbm(label ~ ., data = train_data, distribution = "gaussian", n.trees = 150, interaction.depth = i, cv.folds = 3)
+  
+  best_iter = gbm.perf(boost, method = "cv")
+  pred = predict(boost, test_data, n.trees = best_iter, type = "response")
+
+  test_labels = factor(test_data$label, labels = c("sober", "intoxicated"))
+  pred_labels = factor(ifelse(pred < 1.5, "sober", "intoxicated"))
+  
+  depth.acc.values[i] = mean(test_labels == pred_labels)
+}
+depth = which.max(depth.acc.values)
+
+names(depth.acc.values) = c(1,2,3,4)
+depth.acc.values
+
+for (i in 2:7) {
+  boost = gbm(label ~ ., data = train_data, distribution = "gaussian", n.trees = 150, interaction.depth = depth, cv.folds = i)
+  
+  best_iter = gbm.perf(boost, method = "cv")
+  pred = predict(boost, test_data, n.trees = best_iter, type = "response")
+
+  test_labels = factor(test_data$label, labels = c("sober", "intoxicated"))
+  pred_labels = factor(ifelse(pred < 1.5, "sober", "intoxicated"))
+  
+  folds.acc.values[i] = mean(test_labels == pred_labels)
+}
+folds = which.max(folds.acc.values)
+
+names(folds.acc.values) = c(1:7)
+folds.acc.values
+```
+
+```{r}
+set.seed(12)
+
+boost = gbm(label ~ ., data = train_data, distribution = "gaussian", n.trees = 150, interaction.depth = depth, cv.folds = folds)
+boost
+
+summary(boost)
+
+# test accuracy
+best_iter = gbm.perf(boost, method = "cv")
+pred = predict(boost, test_data, n.trees = best_iter, type = "response")
+
+test_labels = factor(test_data$label, labels = c("sober", "intoxicated"))
+pred_labels = factor(ifelse(pred < 1.5, "sober", "intoxicated"))
+
+
+tp = sum(test_labels == pred_labels & pred_labels == "intoxicated")
+fp = sum(test_labels != pred_labels & pred_labels == "intoxicated")
+tn = sum(test_labels == pred_labels & pred_labels == "sober")
+fn = sum(test_labels != pred_labels & pred_labels == "sober")
+
+accuracy = mean(test_labels == pred_labels); accuracies[4] = accuracy
+precision = tp / (tp + fp); precisions[4] = precision
+recall = tp / (tp + fn); recalls[4] = recall
+f1 = 2 * (precision * recall) / (precision + recall); f1s[4] = f1
+
+cat(noquote(paste0("Boosting\n\nAccuracy: ", round(accuracy,4),
+                   "\nPrecision: ", round(precision,4),
+                   "\nRecall: ", round(recall,4),
+                   "\nF1: ", round(f1,4))))
+
+conf_matrix = table(Predicted = pred_labels, True = test_labels)
+cm_swapped = conf_matrix[c(2, 1), ] # swap rows
+cm_swapped
+```
+
+### [5. Classification Tree Model]{style="color:#FF7F50"}
+
+Run the classification tree model and obtain accuracy, precision, recall, and F1-score.
+
+#### {.solution}
+```{r}
+tree = tree(label ~ ., data = train_data)
+
+summary(tree)
+
+plot(tree)
+text(tree)
+
+pred = predict(tree, test_data, type = "class")
+
+# test accuracy
+test_labels = test_data$label
+
+tp = sum(test_labels == pred & pred == 1)
+fp = sum(test_labels != pred & pred == 1)
+tn = sum(test_labels == pred & pred == 0)
+fn = sum(test_labels != pred & pred == 0)
+
+accuracy = mean(test_data$label == pred); accuracies[5] = accuracy
+precision = tp / (tp + fp); precisions[5] = precision
+recall = tp / (tp + fn); recalls[5] = recall
+f1 = 2 * (precision * recall) / (precision + recall); f1s[5] = f1
+
+cat(noquote(paste0("Classification Tree\n\nAccuracy: ", round(accuracy,4),
+                   "\nPrecision: ", round(precision,4),
+                   "\nRecall: ", round(recall,4),
+                   "\nF1: ", round(f1,4))))
+
+test_labels = factor(test_data$label, labels = c("sober", "intoxicated"))
+pred_labels = factor(pred, labels = c("sober", "intoxicated"))
+
+conf_matrix = table(Predicted = pred_labels, True = test_labels)
+conf_matrix
+```
+
+
+### [6. Support Vector Machine Model]{style="color:#FF7F50"}
+
+First conduct parameter tuning on kernel, then run the SVM model and obtain accuracy, precision, recall, and F1-score.
+
+#### {.solution}
+```{r}
+kernel.options = c("polynomial", "radial", "sigmoid")
+kernel.acc.values = rep(NA, 3)
+
+for (i in 1:3) {
+  svm.model = svm(label ~ ., data = train_data, kernel = kernel.options[i])
+  
+  pred = predict(svm.model, test_data, type="response")
+  test_labels = test_data$label
+  
+  kernel.acc.values[i] = mean(test_labels == pred)
+}
+kernel = kernel.options[which.max(kernel.acc.values)]
+
+names(kernel.acc.values) = kernel.options
+kernel.acc.values
+```
+
+```{r}
+svm.model = svm(label ~ ., data = train_data, kernel = kernel)
+
+# test accuracy
+pred = predict(svm.model, test_data, type="response")
+
+
+test_labels = test_data$label
+
+tp = sum(test_labels == pred & pred == 1)
+fp = sum(test_labels != pred & pred == 1)
+tn = sum(test_labels == pred & pred == 0)
+fn = sum(test_labels != pred & pred == 0)
+
+accuracy = mean(test_labels == pred); accuracies[6] = accuracy
+precision = tp / (tp + fp); precisions[6] = precision
+recall = tp / (tp + fn); recalls[6] = recall
+f1 = 2 * (precision * recall) / (precision + recall); f1s[6] = f1
+
+cat(noquote(paste0("Support Vector Machine\n\nAccuracy: ", 
+                   round(accuracy,4),
+                   "\nPrecision: ", round(precision,4),
+                   "\nRecall: ", round(recall,4),
+                   "\nF1: ", round(f1,4))))
+
+test_labels = factor(test_data$label, labels = c("sober", "intoxicated"))
+pred_labels = factor(pred, labels = c("sober", "intoxicated"))
+
+conf_matrix = table(Predicted = pred_labels, True = test_labels)
+conf_matrix
+```
+
+### [7. Hierarchical Clustering]{style="color:#FF7F50"}
+
+First conduct parameter tuning on linkage method, then run the hierarchical clustering model and obtain accuracy, precision, recall, and F1-score.
+
+#### {.solution}
+```{r}
+linkage.options = c("single", "complete", "average")
+linkage.acc.values = rep(NA, 3)
+linkage.prec.values = rep(NA, 3)
+linkage.rec.values = rep(NA, 3)
+linkage.f1.values = rep(NA, 3)
+
+for (i in 1:3) {
+  hc = hclust(dist(data), method = linkage.options[i])
+  
+  pred = cutree(hc, 2)
+  pred = data.frame(predictions = pred)
+  
+  train_labels = factor(data$label, labels = c("sober", "intoxicated"))
+  pred_labels = factor(ifelse(pred < 1.5, "sober", "intoxicated"))
+  
+  tp = sum(train_labels == pred_labels & pred_labels == "intoxicated")
+  fp = sum(train_labels != pred_labels & pred_labels == "intoxicated")
+  tn = sum(train_labels == pred_labels & pred_labels == "sober")
+
+  linkage.acc.values[i] = mean(train_labels == pred_labels)
+  linkage.prec.values[i] = tp / (tp + fp) #precision
+  linkage.rec.values[i] = tp / (tp + fn)
+  linkage.f1.values[i] = 2 * (precision * recall) / (precision + recall)
+}
+
+linkage = linkage.options[which.max(linkage.prec.values)]
+#accuracies
+names(linkage.acc.values) = linkage.options
+linkage.acc.values
+#precision values
+names(linkage.prec.values) = linkage.options
+linkage.prec.values
+#recall values
+names(linkage.rec.values) = linkage.options
+linkage.rec.values
+#f1 values
+names(linkage.f1.values) = linkage.options
+linkage.f1.values
+```
+
+```{r}
+hc.model = hclust(dist(data), method = linkage)
+
+pred = cutree(hc.model, 2)
+pred = data.frame(predictions = pred)
+
+
+train_labels = factor(data$label, labels = c("sober", "intoxicated"))
+pred_labels = factor(ifelse(pred < 1.5, "sober", "intoxicated"))
+
+
+tp = sum(train_labels == pred_labels & pred_labels == "intoxicated")
+fp = sum(train_labels != pred_labels & pred_labels == "intoxicated")
+tn = sum(train_labels == pred_labels & pred_labels == "sober")
+fn = sum(train_labels != pred_labels & pred_labels == "sober")
+
+accuracy = mean(train_labels == pred_labels); accuracies[7] = accuracy
+precision = tp / (tp + fp); precisions[7] = precision
+recall = tp / (tp + fn); recalls[7] = recall
+f1 = 2 * (precision * recall) / (precision + recall); f1s[7] = f1
+
+cat(noquote(paste0("Hierarchical Clustering (single linkage)\n\nAccuracy: ",
+                   round(accuracy,4),
+                   "\nPrecision: ", round(precision,4),
+                   "\nRecall: ", round(recall,4),
+                   "\nF1: ", round(f1,4))))
+
+conf_matrix = table(Predicted = pred_labels, True = train_labels)
+cm_swapped = conf_matrix[c(2, 1), ] # swap rows
+cm_swapped
+```
+
+
+### [8. K-Nearest Neighbors Model]{style="color:#FF7F50"}
+
+First conduct parameter tuning on k, then run the KNN model and obtain accuracy, precision, recall, and F1-score.
+
+#### {.solution}
+```{r}
+set.seed(12)
+
+normalize = function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+
+data_norm = as.data.frame(lapply(data[2:5], normalize))
+
+train_data = data_norm[train_indices, ]
+test_data  = data_norm[-train_indices, ]
+
+train_labels = data$label[train_indices]
+test_labels  = data$label[-train_indices]
+
+
+k.options = c(3,5,7,9,11,13,15,17)
+
+k.acc.values = rep(NA, 8)
+for (i in 1:8) {
+  set.seed(12)
+  
+  pred = knn(train = train_data, test = test_data, cl = train_labels, k = k.options[i])
+  
+  k.acc.values[i] = mean(pred == test_labels)
+}
+k = k.options[which.max(k.acc.values)]
+
+names(k.acc.values) = k.options
+k.acc.values
+```
+
+```{r}
+set.seed (12)
+
+pred = knn(train = train_data, test = test_data, cl = train_labels, k = k)
+
+
+tp = sum(test_labels == pred & pred == 1)
+fp = sum(test_labels != pred & pred == 1)
+tn = sum(test_labels == pred & pred == 0)
+fn = sum(test_labels != pred & pred == 0)
+
+accuracy = mean(pred == test_labels); accuracies[8] = accuracy
+precision = tp / (tp + fp); precisions[8] = precision
+recall = tp / (tp + fn); recalls[8] = recall
+f1 = 2 * (precision * recall) / (precision + recall); f1s[8] = f1
+
+cat(noquote(paste0("K-Nearest Neighbors\n\nAccuracy: ", round(accuracy,4),
+                   "\nPrecision: ", round(precision,4),
+                   "\nRecall: ", round(recall,4),
+                   "\nF1: ", round(f1,4))))
+
+test_labels = factor(test_labels, labels = c("sober", "intoxicated"))
+pred_labels = factor(pred, labels = c("sober", "intoxicated"))
+
+conf_matrix = table(Predicted = pred_labels, True = test_labels)
+conf_matrix
+```
+
+
+
+### [Analysis]{style="color:#FF7F50"}
+
+#### {.solution}
+```{r}
+labels = c("Logistic Regression", "Bagging", "Random Forest", "Boosting", "Classification Tree", "SVM", "Hierarchical Clustering", "KNN")
+
+labels = c("LR", "Bag", "RF", "Boost", "Tree", "SVM", "HC", "KNN")
+
+names(accuracies) = labels
+names(precisions) = labels
+names(recalls) = labels
+names(f1s) = labels
+
+cat("Accuracy\n")
+round(accuracies,4)
+cat("\nPrecision\n")
+round(precisions,4)
+cat("\nRecall\n")
+round(recalls,4)
+cat("\nF1\n")
+round(f1s,4)
+
+```
+
+```{r}
+accuracies = round(accuracies,4) * 100
+
+df = data.frame(Model = labels, Accuracy = accuracies)
+df_sorted <- df[order(df$Accuracy), ]
+df_sorted$Model <- factor(df_sorted$Model, levels = df_sorted$Model)
+```
+
+```{r}
+ggplot(df_sorted, aes(x = Model, y = Accuracy)) +
+  geom_col(width = 0.6, fill = "steelblue") +  
+  geom_text(aes(label = paste0(Accuracy, "%")), 
+            vjust = -0.5, size = 4) + 
+  scale_y_continuous(limits = c(0, 100), expand = c(0, 0)) +  
+  labs(title = "Model Accuracy Comparison",
+       x = "Model",
+       y = "Accuracy (%)") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none")
+```
