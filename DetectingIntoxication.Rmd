@@ -1,6 +1,6 @@
 ---
 title: "Intoxication Detection Project"
-author: "Norman, Elsa"
+author: "Norman, Elsa; McCartney, Connor; Dertke, Mike"
 date: 'Last Updated: Fri Dec 12, 2025' 
 output:
   html_document:
