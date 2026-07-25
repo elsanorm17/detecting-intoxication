@@ -6,22 +6,21 @@
 |---------|------:|
 | Best Model | Bagging |
 | Best Accuracy | **76.94%** |
-| Models Evaluated | 8 |
-| Raw Dataset Size | **14,058,282** readings |
-| Preprocessed Dataset Size | **2840** readings |
+| Models Evaluated | **8** models |
+| Raw Dataset Size | **14,058,282** values |
+| Preprocessed Dataset Size | **2840** values |
 
 ---
 
 ## Highlights
 
 * Processed **14,057,567** smartphone accelerometer readings collected from **13** participants
-* Engineered features from raw accelerometer data by computing **vector magnitude** and **weighted average** across *120-second windows*
-* Aligned values across multiple datasets
-* Trained and compared **7** machine learning classification models (*Logistic Regression, Classification Trees, Random Forests, Bagging, Boosting, Support Vector Machines, and K-Nearest Neighbors*)
+* Engineered features from raw accelerometer data by computing **vector magnitude** and **windowed averages**
+* Aligned values across multiple datasets using timestamps
+* Trained and compared **7** classification models (*Logistic Regression, Classification Trees, Random Forests, Bagging, Boosting, Support Vector Machines, and K-Nearest Neighbors*)
 * Explored **1** unsupervised learning model (*Hierarchical Clustering*)
 * Evaluated performance using **accuracy**, **precision**, **recall**, and **F1-score**
 * Best-performing model achieved **76.94%** accuracy
-* Conducted exploratory data analysis and feature visualization to understand movement patterns
 
 ---
 
@@ -29,23 +28,23 @@
 
 This project aims to determine whether we can detect excessive alcohol consumption using only smartphone accelerometer data for the 13 participants included in the *Bar Crawl: Detecting Heavy Drinking* dataset. Heavy drinking poses significant health risks; being able to identify when someone is approaching or experiencing high levels of intoxication offers the potential to intervene earlier and reduce alcohol-related harm. 
 
-Our objective is to determine whether accelerometer-based models can identify alcohol intoxication without relying on direct biochemical measurement. By examining whether movement patterns recorded through smartphone sensors correlate with elevated Transdermal Alcohol Content (TAC) levels, we hope to evaluate the feasibility of a non-invasive, automated detection system.
+Our objective is to determine whether accelerometer-based models can identify alcohol intoxication without relying on direct biochemical measurement (e.g. BAC). By examining whether movement patterns recorded through smartphone sensors correlate with elevated Transdermal Alcohol Content (TAC) levels, we hope to evaluate the feasibility of a non-invasive, automated detection system.
 
 ---
 
 ## Dataset
 
-**Source**
+### Source
 
-The dataset used for the project was retrieved from the *UC Irvine Machine Learning Repository*: [Bar Crawl: Detecting Heavy Drinking](https://archive.ics.uci.edu/dataset/515/bar+crawl+detecting+heavy+drinking)
+The dataset used for the project was retrieved from the *UC Irvine Machine Learning Repository* and can be viewed here: [Bar Crawl: Detecting Heavy Drinking](https://archive.ics.uci.edu/dataset/515/bar+crawl+detecting+heavy+drinking)
 
-**Description**
+### Description
 
 The dataset contains **13** participants. For each participant, TAC level was retrieved every 20-30 minutes and smartphone accelerometer data (x, y, z) was recorded every ~0.5 seconds over a 24-hour period. This resulted in a TAC dataset of **715** observations, and an accelerometer dataset of **14,057,567** observations.
 
 Each TAC and accelerometer reading is marked with a timestamp and participant ID to facilite data alignment.
 
-**Preprocessing**
+### Preprocessing
 
 Raw TAC data was transformed into classification data, with the specified user being classified as sober **(TAC < 0.08)** or intoxicated **(TAC ≥ 0.08)** for the corresponding time of the TAC reading.
 
